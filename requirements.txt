@@ -1,0 +1,17 @@
+# Python 3.11 or later. Versions used for the paper.
+numpy==2.4.4
+pandas==3.0.1
+scipy==1.18.1
+statsmodels==0.15.0
+scikit-learn==1.8.0
+matplotlib==3.10.9
+tabulate==0.10.0
+openpyxl==3.1.5
+python-calamine==0.8.2
+requests==2.32.5
+python-dotenv==1.2.2
+# classifier training and inference
+torch==2.13.0
+transformers==5.11.0
+safetensors==0.8.0
+huggingface_hub==1.33.0

@@ -1,0 +1,16 @@
+# secrets
+.env
+# third-party inputs are not redistributed
+inputs/
+# written by the code
+hcr_study/
+model/
+logs/
+.venv/
+.venv-llm/
+# model weights are published on the Hugging Face Hub, not in git
+*.safetensors
+*.bin
+__pycache__/
+*.pyc
+.DS_Store
