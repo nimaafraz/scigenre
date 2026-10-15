@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Reproduce the paper, from data collection to the analyses and figures.
-#
-#   bash run.sh               the whole pipeline, in order (stops at the first error)
-#   bash run.sh sonic STEP    GPU jobs on a Slurm cluster (see "GPU jobs" below and README.md)
+# Reproduce the paper, from data collection to the analyses and figures: bash run.sh (stops at the first error).
 #
 # Layout: the Python files of this repository; third-party inputs in inputs/ and API keys in .env (README.md);
 # the trained model in model/; every output in hcr_study/ (figures in hcr_study/figures/).
@@ -12,7 +9,7 @@
 #         [EL] Scopus / Elsevier API (ELSEVIER_API_KEY required)
 #         [SN] Springer Nature Meta API (SPRINGER_META_API_KEY required)
 #         [in:...] reads the named folder of inputs/
-#         [GPU] advisable on a GPU (the paper's run: one NVIDIA L40S per job, "bash run.sh sonic ...")
+#         [GPU] advisable on a GPU
 #
 # Most steps cache what they fetch and resume where they stopped, so a stage can be run again after an
 # interruption. Steps that accept WORKER=k NWORKERS=n can be split over parallel processes (then run "merge").
@@ -20,80 +17,6 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 PY=${PYTHON:-python}
-
-# ---------------------------------------------------------------------------------------------------------------
-# GPU jobs on a Slurm cluster. The paper's run used UCD's Sonic cluster: partition csgpu, NVIDIA L40S GPUs, full
-# precision. Adapt SLURM and the module line to your cluster. Run "bash run.sh sonic setup" once on a login node.
-#   train      SciGenre (seed 42), the three leave-venue-out folds, and the SciBERT and BERT baselines
-#   seeds      seeds 43-46 of the three encoders (they report the seed variation only)
-#   score      score every text the analyses classify: first run the classification steps below with SE_COLLECT=1
-#              (profiles.py records the texts in hcr_study/scores/texts.jsonl, and the outputs of that pass are
-#              placeholders, to be deleted), then this job, then the pipeline again without SE_COLLECT; profiles.py
-#              reads hcr_study/scores/scores.csv when its SHA-256 fingerprint matches the installed model, and
-#              scores any text missing from it locally
-#   llm-setup  build the vLLM environment (login node), then: llm   zero-shot LLM baseline on two GPUs
-# ---------------------------------------------------------------------------------------------------------------
-SLURM="-p csgpu --constraint=l40s -c 8 -o logs/%x-%j.out"
-MODULES="module load python/3.13.0-gcc-11.5.0-ixlncbp"
-ENV="$MODULES; source .venv/bin/activate; export HF_HOME=\${HF_HOME:-\$HOME/.cache/huggingface} TOKENIZERS_PARALLELISM=false"
-# vLLM compiles some kernels at start-up (nvcc, CUDA 12.9); FlashInfer's sampler needs cuRAND headers that Sonic's
-# CUDA module lacks, so vLLM's PyTorch sampler is used
-ENV_LLM="$MODULES; module load cuda/12.9; source .venv-llm/bin/activate; export VLLM_USE_FLASHINFER_SAMPLER=0 HF_HOME=\${HF_HOME:-\$HOME/.cache/huggingface} TOKENIZERS_PARALLELISM=false"
-
-job() {     # name, hours, GPUs, environment, command; the job script is a bash login shell (for "module")
-    sbatch -J "$1" $SLURM -t "$2:00:00" --gres=gpu:"$3" <<EOF
-#!/bin/bash -l
-cd "$PWD"; $4
-echo "node \$(hostname), GPU \$(nvidia-smi --query-gpu=name --format=csv,noheader), start \$(date '+%F %T')"
-$5
-EOF
-}
-
-sonic() {
-    mkdir -p logs
-    case "${1:-}" in
-    setup)
-        eval "$MODULES"
-        python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt ;;
-    train)
-        job se-train 8 1 "$ENV" "python -u train.py final --seed 42"
-        for k in 1 2 3; do job se-holdout 8 1 "$ENV" "python -u train.py holdout --fold $k"; done
-        job se-scibert 8 1 "$ENV" "python -u train.py final --model allenai/scibert_scivocab_uncased --tag scibert"
-        job se-bert 8 1 "$ENV" "python -u train.py final --model google-bert/bert-base-uncased --tag bert" ;;
-    seeds)
-        for s in 43 44 45 46; do
-            job se-seed 8 1 "$ENV" "python -u train.py final --seed $s"
-            job se-seed 8 1 "$ENV" "python -u train.py final --model allenai/scibert_scivocab_uncased --tag scibert_seed$s --seed $s"
-            job se-seed 8 1 "$ENV" "python -u train.py final --model google-bert/bert-base-uncased --tag bert_seed$s --seed $s"
-        done ;;
-    score)
-        job se-score 4 1 "$ENV" "python -u train.py score" ;;
-    llm-setup)
-        # vLLM 0.31.0 for CUDA 12.9 with PyTorch 2.13.0+cu129: Sonic's driver (565.57) supports CUDA 12.7, so the default
-        # PyPI build (CUDA 13.0) fails there, while CUDA 12.x builds run by minor-version compatibility
-        eval "$MODULES"
-        rm -rf .venv-llm && python3 -m venv .venv-llm && . .venv-llm/bin/activate
-        pip install -q -U pip
-        pip install -q torch==2.13.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
-        pip install -q "https://github.com/vllm-project/vllm/releases/download/v0.31.0/vllm-0.31.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" pandas scikit-learn matplotlib python-dotenv requests   # vllm brings torch and transformers
-        # torchcodec from PyPI is built for CUDA 13 and fails to load on this driver; vLLM needs it only for audio and video
-        pip install -q --force-reinstall --no-deps "torchcodec==0.17.0" --index-url https://download.pytorch.org/whl/cpu
-        python - <<"PY"
-from huggingface_hub import snapshot_download
-print(snapshot_download("openai/gpt-oss-120b", revision="b5c939de8f754692c1647ca79fbf85e8c1e70f8a",
-                        allow_patterns=["*.json", "*.safetensors", "*.txt", "*.jinja", "tokenizer*"]))
-PY
-        ;;
-    llm)
-        job se-llm 12 2 "$ENV_LLM" "TP=2 python -u train.py llm gpt-oss-120b" ;;
-    *)
-        echo "usage: bash run.sh sonic setup|train|seeds|score|llm-setup|llm"; exit 1 ;;
-    esac
-}
-
-if [ "${1:-}" = "sonic" ]; then
-    shift; sonic "$@"; exit
-fi
 
 # Missing abstracts of the downloaded profiles: Semantic Scholar by DOI, then Scopus (DOI, exact title) and Springer
 # Nature. Both steps are incremental and run before every classification. [S2] [EL] [SN]
@@ -122,10 +45,18 @@ $PY train.py install
 $PY train.py holdout                  # the three folds, then the summary (one fold: --fold k)
 $PY train.py final --model allenai/scibert_scivocab_uncased --tag scibert
 $PY train.py final --model google-bert/bert-base-uncased --tag bert
+# Seeds 43-46 of the three encoders (they report the seed variation only)
+for s in 43 44 45 46; do
+    $PY train.py final --seed $s
+    $PY train.py final --model allenai/scibert_scivocab_uncased --tag scibert_seed$s --seed $s
+    $PY train.py final --model google-bert/bert-base-uncased --tag bert_seed$s --seed $s
+done
+# Zero-shot LLM baseline: needs vLLM 0.31 and two 48 GB GPUs, so it is left to run by hand:
+#   TP=2 $PY train.py llm gpt-oss-120b
 
 # ---------------------------------------------------------------------------------------------------------------
 # 3. RQ1 on the held-out test papers, against keyword rules, database types, TF-IDF + SVM, Smyth & Cunningham's rule
-#    (their code) and the zero-shot LLM ("bash run.sh sonic llm"); replication of Smyth & Cunningham's published
+#    (their code) and the zero-shot LLM (stage 2); replication of Smyth & Cunningham's published
 #    labels. [S2] [OA] [in:smyth_cunningham]
 # ---------------------------------------------------------------------------------------------------------------
 $PY rq1_evaluation.py baselines fetch
@@ -136,7 +67,7 @@ $PY rq1_evaluation.py sc-replication evaluate
 
 # ---------------------------------------------------------------------------------------------------------------
 # 4. Resolve and fetch the profiles of the 2025 HCR Computer Science list and match the list to the Stanford-Elsevier
-#    career table (inputs/match_exceptions.csv is used if present; it is not released). Then the HCR Computer
+#    career table. Then the HCR Computer
 #    Science lists 2014-2025, used to flag comparison researchers who were ever listed. Then the classification of
 #    the HCR-listed researchers (2025 list, then the historical lists). It comes before the comparison groups,
 #    which are drawn against its outputs. [OA] [S2] [EL] [SN] [in:hcr_lists] [in:stanford_elsevier]

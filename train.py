@@ -1,5 +1,5 @@
 """Stage 2: training of SciGenre and of the fine-tuned baselines, the leave-venue-out test, the zero-shot LLM
-baseline, and the scoring of the analyses' texts on a GPU cluster (see run.sh).
+baseline, and the scoring of the analyses' texts on a separate GPU machine (SE_COLLECT, see profiles.py).
 
     python train.py final [--seed 42] [--epochs 1] [--model M --tag T]   SciGenre (or a fine-tuned baseline)
     python train.py install                                              install the trained model as model/
@@ -155,7 +155,7 @@ def train_final():
     Model: SPECTER2 (allenai/specter2_base), input title + abstract only (common.model_text; never the venue),
     class-weighted cross-entropy, lr 2e-5, batch 16, 10% warm-up, 384 tokens; one pass over the training papers
     (76,396), decision threshold 0.5.
-    Training runs in full precision on every device (the paper's run: one NVIDIA L40S, UCD Sonic; see run.sh sonic).
+    Training runs in full precision on every device.
     Usage: train.py final [--seed 42] [--epochs 1]   Output: hcr_study/models_final/seed<seed>/ (model, preds.csv, metrics.json)
     Baselines with the same data, split and recipe: train.py final --model allenai/scibert_scivocab_uncased --tag scibert
       Output: hcr_study/models_baselines/<tag>/"""
@@ -418,11 +418,11 @@ def venue_holdout():
 
 
 # =====================================================================================================================
-# Scoring of the analyses' texts on a GPU cluster
+# Scoring of the analyses' texts on a GPU
 # =====================================================================================================================
 
 def score_texts():
-    """Score on UCD Sonic every text the analyses classify (hcr_study/scores/texts.jsonl, recorded on the Mac with
+    """Score on a GPU every text the analyses classify (hcr_study/scores/texts.jsonl, recorded with
     SE_COLLECT=1; see profiles.py) with the paper's model, hcr_study/models_final/seed42/model, exactly as profiles.score_texts
     does: length-sorted batches of 64, 384 tokens, padding to a multiple of 64, P(survey) from the softmax.
     Output: hcr_study/scores/scores.csv (h = SHA-1 of the text, p) and scores.json (SHA-256 of the model weights)."""
@@ -455,8 +455,8 @@ def score_texts():
 # =====================================================================================================================
 
 def llm_zero_shot():
-    """Zero-shot LLM baseline for RQ1 on UCD Sonic. Same 9,555 test papers as every other method; title and
-    abstract cleaned as for the SciGenre (common.model_text). Open models only, run with vLLM.
+    """Zero-shot LLM baseline for RQ1. Same 9,555 test papers as every other method; title and
+    abstract cleaned as for the SciGenre (common.model_text). Open models only, run with vLLM 0.31 on two 48 GB GPUs (TP=2).
     Usage: train.py llm gpt-oss-120b
     Output: hcr_study/models_baselines/llm_<name>/preds.csv (p = 1 for an answer of survey), outputs.jsonl (every raw answer), info.json"""
     from vllm import LLM, SamplingParams

@@ -9,13 +9,13 @@ SciGenre is a SPECTER2 classifier that labels a paper as a survey or a research 
 The paper uses it to measure how much of the citation impact of researchers on Clarivate's Highly Cited Researchers
 (HCR) list in Computer Science comes from surveys, and compares them with matched peers, a random sample of the
 Stanford–Elsevier database of top-cited scientists, and IEEE and ACM Fellows. The trained model is on the Hugging Face
-Hub (MODEL_URL, Apache-2.0), with `predict.py` for classifying a CSV file of titles and abstracts.
+Hub (MODEL_URL), with `predict.py` for classifying a CSV file of titles and abstracts.
 
 ## Files
 
 | File | Content |
 |---|---|
-| `run.sh` | Every step of the paper, in order, and the GPU jobs of the paper's run on a Slurm cluster |
+| `run.sh` | Every step of the paper, in order |
 | `common.py` | Model input (title and abstract, cleaned), OpenAlex client, profile format, h-index, figure style |
 | `ground_truth.py` | Stage 1: ground truth from 18 survey venues and 14 research venues, and missing abstracts |
 | `train.py` | Stage 2: SciGenre, the fine-tuned baselines, the leave-venue-out test, the zero-shot LLM baseline |
@@ -53,8 +53,7 @@ None of these files is redistributed here. Download them from their publishers a
 | `fellows/ACM_Fellows_2024_announcement.txt`, `fellows/ACM_Fellows_2025_announcement.txt` | text of ACM's announcements of January 2025 and January 2026 | ACM press releases, acm.org |
 | `fellows/ACM Fellows.csv` | ACM Fellows listing with world region | ACM awards site, awards.acm.org |
 | `smyth_cunningham/sc_labels_cs.csv` | Smyth and Cunningham's released labels, Computer Science rows | figshare, doi:[10.6084/m9.figshare.32077821](https://doi.org/10.6084/m9.figshare.32077821) |
-| `smyth_cunningham/review_paper_rule.py` | Smyth and Cunningham's code of their review rule, unchanged | the authors |
-| `match_exceptions.csv` | hand-set match decisions (optional, not released) | see below |
+| `smyth_cunningham/review_paper_rule.py` | Smyth and Cunningham's code of their review rule, unchanged | same figshare record |
 
 Notes on the inputs:
 
@@ -80,21 +79,10 @@ Notes on the inputs:
   d[d.primary_fos == "computer_science"].to_csv("inputs/smyth_cunningham/sc_labels_cs.csv", index=False)
   ```
 
-  `review_paper_rule.py` is the authors' code of the rule that labels their 17M data set. It is not ours to
-  redistribute, so obtain it from the authors. The code loads it on first use and stops with a message if it is
-  missing. With our Semantic Scholar records it reproduces their published labels for 99.95% of 26,589 re-fetched
-  Computer Science papers (`rq1_evaluation.py sc-replication`).
-* **match_exceptions.csv (not released).** For nine researchers of the 2025 list, the paper's run fixed the OpenAlex
-  author by hand instead of the name search. For eight, the Stanford–Elsevier record was identified by hand (names in
-  another form, or matching several records), and one namesake was rejected after inspection. These decisions name
-  people, so the file is not released. Without it, the documented rules resolve these researchers automatically and
-  may resolve them differently. The file is a CSV with a header, and `name` is the name as built from the 2025 list ("Last Name, First Name"):
-
-  ```
-  rule,name,value
-  openalex_id,"Last, First",<OpenAlex author ID>
-  els_reject,"Last, First",Institution name as written in els.csv
-  ```
+  `review_paper_rule.py` is the authors' code of the rule that labels their 17M data set, released with their
+  dataset. The code loads it on first use and stops with a message if it is missing. With our Semantic Scholar
+  records it reproduces their published labels for 99.95% of 26,589 re-fetched Computer Science papers
+  (`rq1_evaluation.py sc-replication`).
 
 ## Running
 
@@ -102,29 +90,13 @@ Notes on the inputs:
 read an input folder. Most steps cache what they fetch and resume where they stopped, and the slow retrieval steps can
 be split over parallel processes (`WORKER=k NWORKERS=n`, then `merge`). Training and scoring are advisable on a GPU.
 
-**GPU jobs (paper's run).** Every model was trained, and every profile paper scored, on one NVIDIA L40S of University
-College Dublin's Sonic cluster, in full precision. `bash run.sh sonic setup|train|seeds|score|llm-setup|llm` submits
-these jobs with Slurm. Adapt the partition and module lines at the top of `run.sh` to your cluster. To score on the
-cluster, run the classification steps once with `SE_COLLECT=1`, which records every text in
-`hcr_study/scores/texts.jsonl` instead of running the model (delete the placeholder outputs of that pass), then
-`bash run.sh sonic score`, then run the pipeline again without `SE_COLLECT`. `profiles.py` reads
-`hcr_study/scores/scores.csv` when its SHA-256 fingerprint matches the installed model and scores any missing text
-locally. The statistical analyses run on any computer and give identical results.
-
 ## Reproducibility
 
 Run on the data retrieved for the paper, stages 6 and 7 reproduce the reports from which the paper's numbers were
 taken. A new run depends on the current state of OpenAlex and of the other APIs, so profiles retrieved today can
 differ from those of October 2026.
 
-## Data and privacy
+## License
 
-This repository contains code only. It redistributes no data retrieved from OpenAlex, Semantic Scholar, Scopus,
-Springer Nature, Clarivate or the Stanford–Elsevier database, and no researcher-level results. The code retrieves the
-data from their providers. The paper reports no researcher by name, and nothing in this repository identifies one.
-Inputs that name people, such as the HCR lists, stay outside the repository, as do the files the code writes with
-names in them (`*_INTERNAL`).
-
-## Licenses
-
-Code: MIT (`LICENSE`). Model: Apache-2.0, as a fine-tuned version of `allenai/specter2_base`. OpenAlex data are CC0.
+MIT (`LICENSE`). Anyone may use, copy, modify and redistribute the code, also commercially, provided the copyright
+and license notice are kept.

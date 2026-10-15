@@ -41,9 +41,9 @@ STUDY = os.path.join(HERE, "hcr_study")
 # (fewer than 10 words) are not classified and stay in both versions of every indicator.
 # Categories: non-paper (OpenAlex type or title: books, editorials, errata, ...), no abstract, survey
 # (P(survey) >= threshold), research.
-# Scores computed on UCD Sonic (bash run.sh sonic score): SE_COLLECT=1 records every text the analyses
+# Scoring on another machine with a GPU: SE_COLLECT=1 records every text the analyses
 # classify in hcr_study/scores/texts.jsonl instead of running the model (the outputs of such a run are placeholders and
-# are deleted); train.py score scores them with the installed model on an NVIDIA L40S; proba() then reads
+# are deleted); train.py score scores them with the installed model; proba() then reads
 # hcr_study/scores/scores.csv when its model fingerprint matches the installed model, and scores any text missing
 # from it here (reported).
 
@@ -59,7 +59,7 @@ _norm = lambda t: re.sub(r"[^a-z0-9]+", " ", str(t).lower()).strip()
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
 _M = {}
 def _model():
-    """Tokenizer and model, loaded on first use (not at all when every score comes from the Sonic cache)."""
+    """Tokenizer and model, loaded on first use (not at all when every score comes from the score cache)."""
     if not _M:
         _M["tok"] = AutoTokenizer.from_pretrained(MODEL_DIR)
         _M["model"] = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR, dtype=torch.float32).to(DEVICE).eval()
@@ -116,7 +116,7 @@ def score_texts(texts, bs=64) -> np.ndarray:
 
 def proba(titles, abstracts, bs=64) -> np.ndarray:
     texts = [model_text(t, a) for t, a in zip(titles, abstracts)]
-    if COLLECT:                                          # record the texts for Sonic; placeholder scores
+    if COLLECT:                                          # record the texts for train.py score; placeholder scores
         os.makedirs(SCORES, exist_ok=True)
         with open(os.path.join(SCORES, "texts.jsonl"), "a") as f:
             for t in texts: f.write(json.dumps({"h": text_hash(t), "t": t}) + "\n")
@@ -128,7 +128,7 @@ def proba(titles, abstracts, bs=64) -> np.ndarray:
     if miss.any():
         if cache:
             _CACHE["missed"] += int(miss.sum())
-            print(f"profiles.py: {int(miss.sum())} texts not in the Sonic scores, scored here (total {_CACHE['missed']})", flush=True)
+            print(f"profiles.py: {int(miss.sum())} texts not in the score cache, scored here (total {_CACHE['missed']})", flush=True)
         out[miss] = score_texts([t for t, m in zip(texts, miss) if m], bs)
     return out
 

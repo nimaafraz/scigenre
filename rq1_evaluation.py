@@ -36,8 +36,8 @@ STUDY = os.path.join(HERE, "hcr_study")
 # Quantitative Science Studies 7, 1044-1061, doi:10.1162/QSS.a.488.
 #
 # Reference implementation: the authors' released code, review_paper_rule.py (it reproduces the published counts of
-# their 17M data set), imported unchanged. It is not redistributed with this pipeline: obtain it from the authors and
-# place it at inputs/smyth_cunningham/review_paper_rule.py (see README.md). `released_record` turns one of our cached
+# their 17M data set), imported unchanged. It is not redistributed here: download it with their dataset (figshare,
+# doi:10.6084/m9.figshare.32077821) and place it at inputs/smyth_cunningham/review_paper_rule.py (see README.md). `released_record` turns one of our cached
 # Semantic Scholar records into the record their `classify` reads, and `is_review_released` applies it. Their code reads
 # the venue and journal names only, uses separate phrase lists for titles and abstracts, and requires at least one
 # reference.
@@ -387,7 +387,7 @@ def evaluate_baselines():
     Xtr = vec.fit_transform([model_text(t, a) for t, a in zip(tr.title, tr.abstract)])
     svm = LinearSVC(class_weight="balanced", C=1.0, random_state=42).fit(Xtr, tr.y)
     svm_score = svm.decision_function(vec.transform([model_text(t, a) for t, a in zip(te.title, te.abstract)]))
-    # baselines trained or run on UCD Sonic (bash run.sh sonic train, llm): encoders fine-tuned with the final model's data, split and recipe
+    # baselines: encoders fine-tuned with the final model's data, split and recipe
     # (train.py final --model), and zero-shot open LLMs (train.py llm, p = 1 for an answer of survey)
     base_p = {}
     for name, tag in BASELINES.items():
