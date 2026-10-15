@@ -9,7 +9,7 @@ SciGenre is a SPECTER2 classifier that labels a paper as a survey or a research 
 The paper uses it to measure how much of the citation impact of researchers on Clarivate's Highly Cited Researchers
 (HCR) list in Computer Science comes from surveys, and compares them with matched peers, a random sample of the
 Stanford–Elsevier database of top-cited scientists, and IEEE and ACM Fellows. The trained model is on the Hugging Face
-Hub (MODEL_URL), with `predict.py` for classifying a CSV file of titles and abstracts.
+Hub (https://huggingface.co/nimaafraz/scigenre), with `predict.py` for classifying a CSV file of titles and abstracts.
 
 ## Files
 
@@ -35,7 +35,7 @@ Every output is written to `hcr_study/` (figures to `hcr_study/figures/`).
    Nature. The code never prints them.
 3. The third-party inputs in `inputs/` (next section).
 4. The model: either train it (`train.py final`, then `train.py install`) or download it from the Hugging Face Hub
-   into `model/` (`hf download MODEL_REPO_ID --local-dir model`). `profiles.py` also reads the ground truth and its
+   into `model/` (`hf download nimaafraz/scigenre --local-dir model`). `profiles.py` also reads the ground truth and its
    split, so with a downloaded model run stage 1 and then `python train.py final --split-only` (seed 2026).
 
 ## Third-party inputs
