@@ -67,10 +67,9 @@ $PY rq1_evaluation.py sc-replication evaluate
 
 # ---------------------------------------------------------------------------------------------------------------
 # 4. Resolve and fetch the profiles of the 2025 HCR Computer Science list and match the list to the Stanford-Elsevier
-#    career table. Then the HCR Computer
-#    Science lists 2014-2025, used to flag comparison researchers who were ever listed. Then the classification of
-#    the HCR-listed researchers (2025 list, then the historical lists). It comes before the comparison groups,
-#    which are drawn against its outputs. [OA] [S2] [EL] [SN] [in:hcr_lists] [in:stanford_elsevier]
+#    career table. Then the HCR Computer Science lists 2014-2025, used to flag comparison researchers who were ever
+#    listed. Then the classification of the HCR-listed researchers (2025 list, then the historical lists). It comes
+#    before the comparison groups, which are drawn against its outputs. [OA] [S2] [EL] [SN] [in:hcr_lists] [in:stanford_elsevier]
 # ---------------------------------------------------------------------------------------------------------------
 $PY profiles.py fetch
 $PY profiles.py els-screen
