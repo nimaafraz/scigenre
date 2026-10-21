@@ -16,7 +16,7 @@ from scipy.stats import kendalltau, wilcoxon
 import common
 import comparison_groups
 from common import (
-    ACM, flag, IEEE, INK, INK_2, LISTED, LW, MATCHED, MS, panel, POINT, r_handle, R_MARK, r_sets, REFERENCE,
+    ACM, flag, IEEE, INK, INK_2, LISTED, LW, MATCHED, MS, panel, POINT, r_handle, R_MARK, REFERENCE,
     save, SPRINGER, style, WIDE,
 )
 
@@ -221,7 +221,7 @@ def hcr_figures():
     ax.set_ylabel("Share that comes from surveys (%)")
     ax.set_ylim(0, 100)
     h_, l_ = ax.get_legend_handles_labels()
-    ax.legend(handles=h_ + [r_handle()], loc="upper left")
+    ax.legend(handles=h_ + [r_handle()], loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False)   # below: clear of the points
     ax.tick_params(axis="x", length=0)
     style(ax)
     save(fig, "fig_layers")
@@ -358,10 +358,11 @@ def hcr_figures():
         ax = axes[0]
         fm = pairs["key"].isin(R_NAMES).values
         boxes(ax, [pairs["share_cites_m"]], positions=[1], fmt="{:.1f}%", flags=[fm], color=SERIES)
-        boxes(ax, [pairs["share_cites_c"]], positions=[2], fmt="{:.1f}%", color=SERIES_2)
+        boxes(ax, [pairs["share_cites_c"]], positions=[2], fmt="{:.1f}%", color=SERIES_2,
+              flags=[(pairs["share_cites_c"] > 50).values])          # peers whose mean survey share of citations exceeds half
         ax.set_xlim(0.4, 2.6)
         ax.legend(handles=[r_handle()], loc="upper left")
-        ax.set_xticks([1, 2], [f"HCR-listed with peers\n(n = {len(pairs)})", f"Their peers, mean per\nresearcher ({len(C)} peers)"])
+        ax.set_xticks([1, 2], [f"HCR-listed\nwith peers\n(n = {len(pairs)})", f"Their peers,\nmean per researcher\n({len(C)} peers)"])
         ax.set_ylabel("Survey share of citations (%)")
         ax.set_ylim(0, 100)
         ax.tick_params(axis="x", length=0)
@@ -383,7 +384,7 @@ def hcr_figures():
                         arrowprops=dict(arrowstyle="-|>", color=INK, lw=0.9, shrinkA=0, shrinkB=0), zorder=8)
             ax.text(x0 - 0.47, mb, f"{mb:.0f}", ha="right", va="center", fontsize=6.5, color=INK)
             ax.text(x0 + 0.47, ma, f"{ma:.0f}", ha="left", va="center", fontsize=6.5, color=INK)
-        ax.set_xticks([1, 2.5], [f"HCR-listed with peers\n(n = {len(pairs)})", f"Their peers, mean per\nresearcher ({len(C)} peers)"])
+        ax.set_xticks([1, 2.5], [f"HCR-listed\nwith peers\n(n = {len(pairs)})", f"Their peers,\nmean per researcher\n({len(C)} peers)"])
         ax.set_ylabel("OpenAlex top-1% papers, 2014–2024")
         ax.set_xlim(0.3, 3.2)
         ax.set_ylim(bottom=0)
@@ -600,19 +601,18 @@ def fellows_figure():
     """Figure for RQ4: survey dependence of academic HCR-listed researchers, peer-elected ACM and IEEE Fellows, and the
     academic Stanford-Elsevier reference sample (comparison_groups.py fellows report). Three panels: survey share of papers, survey
     share of citations (the citation drop when surveys are excluded), and the survey citation dividend.
-    In every group, points beyond the group's own Tukey fence for the survey share of citations have a dark outline, and
-    the researcher with the highest survey share of citations is enlarged in all panels, with only the value shown.
-    R1-R8 keep the shared diamond marker. No researcher is named.
+    In every group, researchers with more than half of their citations from surveys are diamonds in the group's colour
+    (R1-R8 among the HCR-listed), and the researcher with the highest survey share of citations is enlarged in all
+    panels, with only the value shown. No researcher is named.
     Output: hcr_study/figures/fig_fellows.{pdf,png}"""
     GROUPS = [("HCR-listed 2025", "HCR-\nlisted", LISTED), ("ACM Fellow 2025-26", "ACM\nFellows", ACM),
               ("IEEE Fellow 2026", "IEEE\nFellows", IEEE), ("Reference sample", "Random\nsample", REFERENCE)]
     P, C, D = "Survey % of papers", "Survey % of citations", "Dividend D"   # all records, as everywhere in the paper
 
     d = pd.read_csv(os.path.join(HERE, "hcr_study", "fellows2026", "per_person_scored_INTERNAL.csv"))
-    rids = r_sets()["ids"]
     rng = np.random.default_rng(7)
     d["x_jit"] = rng.uniform(-0.17, 0.17, len(d))
-    d["is_R"] = (d.group == "HCR-listed 2025") & d["OpenAlex ID"].isin(rids)
+    d["is_R"] = d[C] > 50      # diamonds: more than half of citations from surveys, in every group (R1-R8 among the HCR-listed)
     d["fence_out"] = False; d["top"] = False
     for g, _, _ in GROUPS:
         m = d.group == g
@@ -638,10 +638,8 @@ def fellows_figure():
                        capprops=dict(color=INK_2, linewidth=0.7), medianprops=dict(color=INK, linewidth=1.3))
             plain = e[~e.is_R & ~e.top]
             ax.scatter(i + plain.x_jit, y[plain.index], color=colour, zorder=3, **POINT)
-            out = plain[plain.fence_out]
-            ax.scatter(i + out.x_jit, y[out.index], s=9, facecolor=colour, edgecolor=INK, linewidths=0.6, zorder=4)
             rr = e[e.is_R & ~e.top]
-            ax.scatter(i + rr.x_jit, y[rr.index], **{**R_MARK, "s": 13})
+            ax.scatter(i + rr.x_jit, y[rr.index], **{**R_MARK, "s": 13, "facecolor": colour})
             t = e[e.top]
             ax.scatter(i + t.x_jit, y[t.index], s=46, marker="D" if t.is_R.any() else "o", facecolor=colour,
                        edgecolor=INK, linewidths=1.1, zorder=7)
@@ -663,9 +661,7 @@ def fellows_figure():
         for lab in ax.get_xticklabels():
             lab.set_fontsize(6.5)
 
-    handles = [plt.Line2D([], [], linestyle="none", marker="o", markersize=3.5, markerfacecolor=REFERENCE, markeredgecolor=INK,
-                          markeredgewidth=0.6, label="Beyond the group's Tukey fence for the survey share of citations"),
-               plt.Line2D([], [], linestyle="none", marker="o", markersize=6, markerfacecolor=REFERENCE, markeredgecolor=INK,
+    handles = [plt.Line2D([], [], linestyle="none", marker="D", markersize=6, markerfacecolor=REFERENCE, markeredgecolor=INK,
                           markeredgewidth=1.1, label="Highest survey share of citations in the group"),
                r_handle()]
     if SPRINGER:
@@ -727,7 +723,7 @@ def dividend_figure():
     ax.set_xlabel("Years after publication"); ax.set_ylabel("Cumulative citations,\nsurveys / research papers")
     panel(ax, "b", "Timing, papers of 2012–2014")
 
-    rh = r_handle(); rh.set_label("R1–R8")
+    rh = r_handle(); rh.set_label("R1–R8"); rh.set_markerfacecolor(LISTED)   # the median of R1-R8 (blue diamonds)
     handles = [plt.Line2D([], [], color=col, label=lab, **LINE) for _, lab, col in GROUPS] + [rh]
     fig.legend(handles=handles, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), fontsize=6.5, columnspacing=1.2, handlelength=2.2)
     if SPRINGER:

@@ -584,7 +584,9 @@ def outlier_model():
             Dv = c * (1 - pp) / (pp * (1 - c))
             ax.plot(100 * pp, Dv, color=common.GRID, linewidth=1.1, zorder=1)
             ax.text(44.5, Dv[np.argmin(np.abs(pp - 0.445))], f"$R_C$ = {Cv}%", fontsize=6.5, color=common.INK_2, va="center", ha="left")
-        ax.scatter(R["p"], R["D"], color=REFERENCE, zorder=2, label=NAMES["reference"], **{**POINT, "s": 8})
+        rr = (R["C"] > 50).values                       # random-sample researchers with more than half of citations from surveys
+        ax.scatter(R["p"][~rr], R["D"][~rr], color=REFERENCE, zorder=2, label=NAMES["reference"], **{**POINT, "s": 8})
+        flag(ax, R["p"][rr], R["D"][rr], label=False, facecolor=REFERENCE)
         rf = L["key"].isin(r_sets()["names"]).values
         ax.scatter(L["p"][~rf], L["D"][~rf], color=LISTED, zorder=3, label=NAMES["listed"], **{**POINT, "s": 9, "alpha": 0.85})
         flag(ax, L["p"][rf], L["D"][rf], label=False)
@@ -594,9 +596,9 @@ def outlier_model():
         ax.text(44.5, D95 * 1.06, "random sample 95th pct.", fontsize=6, color=common.INK_2, va="bottom", ha="right")
         ax.set_yscale("log")
         ax.set_xlim(0, 45)
-        ax.set_ylim(0.1, 50)
-        ax.set_yticks([0.1, 0.2, 0.5, 1, 2, 5, 10, 20])
-        ax.set_yticklabels(["0.1", "0.2", "0.5", "1", "2", "5", "10", "20"])
+        ax.set_ylim(0.1, max(50, 1.4 * np.nanmax(d["D"])))
+        ax.set_yticks([0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50])
+        ax.set_yticklabels(["0.1", "0.2", "0.5", "1", "2", "5", "10", "20", "50"])
         ax.yaxis.set_minor_formatter(plt.NullFormatter())
         ax.set_xlabel("Volume: surveys as % of papers ($v$)")
         ax.set_ylabel("Dividend: citations per survey /\ncitations per other record ($D$, log scale)")
@@ -955,12 +957,12 @@ def composite_figure(d, S, k2):
     data, flags = [], []
     for g in groups:
         e = d[d.group == g].dropna(subset=["dc %"])
-        data.append(-e["dc %"].values); flags.append((e["id"].isin(R_IDS) & (g == "listed")).values)
+        data.append(-e["dc %"].values); flags.append((e["C"] > 50).values)   # over half of citations from surveys (R1-R8 if listed)
     boxes(ax, data, range(3), [COLORS[g] for g in groups], flags=flags, rng=np.random.default_rng(3))
-    ax.set_xticks(range(3), [f"{NAMES[g]}\n(n = {int((d.group == g).sum())})" for g in groups])
+    ax.set_xticks(range(3), [f"{NAMES[g].replace(' ', chr(10))}\n(n = {int((d.group == g).sum())})" for g in groups])
     ax.tick_params(axis="x", length=0)
     ax.set_ylabel("Drop in the composite indicator\nwithout surveys (%)")
-    ax.set_ylim(bottom=-0.5)
+    ax.set_ylim(-0.5, 1.3 * max(np.nanmax(x) for x in data))   # headroom: the legend sits above the points
     ax.legend(handles=[r_handle()], loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.9)
     panel(ax, "a", "Composite drop by group")
     style(ax)

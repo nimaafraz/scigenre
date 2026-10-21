@@ -298,7 +298,7 @@ POINT = dict(s=7, alpha=0.55, linewidths=0)   # one dot per researcher
 SPRINGER = os.environ.get("FIG_PROFILE", "") == "springer"
 WIDE = 5.15 if SPRINGER else 7.16
 
-R_LABEL = "R1–R8 (over half of citations from surveys)"
+R_LABEL = "Over half of citations from surveys\n(HCR-listed: R1–R8)"   # diamonds in every group, in its colour
 R_MARK = dict(marker="D", s=15, facecolor=LISTED, edgecolor=INK, linewidths=0.6, zorder=6)
 
 plt.rcParams.update({
@@ -344,7 +344,7 @@ def flag(ax, x, y, label=True, **kw):
 
 
 def r_handle():
-    return plt.Line2D([], [], linestyle="none", marker="D", markersize=4, markerfacecolor=LISTED,
+    return plt.Line2D([], [], linestyle="none", marker="D", markersize=4, markerfacecolor="white",
                       markeredgecolor=INK, markeredgewidth=0.6, label=R_LABEL)
 
 
@@ -369,7 +369,8 @@ def r_sets():
 
 def boxes(ax, data, positions, colors, flags=None, width=0.5, fmt="{:.1f}%", labels=True, rng=None):
     """Neutral boxes (interquartile range, median, whiskers to the Tukey fences) over one dot per researcher in the
-    group's colour. flags (boolean arrays) mark R1-R8 with the shared diamond. The median is written beside the box."""
+    group's colour. flags (boolean arrays) mark researchers with more than half of their citations from surveys with the
+    shared diamond in the group's colour (R1-R8 among the HCR-listed). The median is written beside the box."""
     rng = rng if rng is not None else np.random.default_rng(42)
     flags = flags if flags is not None else [None] * len(data)
     for x0, v, col, f in zip(positions, data, colors, flags):
@@ -381,7 +382,7 @@ def boxes(ax, data, positions, colors, flags=None, width=0.5, fmt="{:.1f}%", lab
         xj = x0 + rng.uniform(-width * 0.34, width * 0.34, len(v))
         ax.scatter(xj[~f], v[~f], color=col, zorder=3, **POINT)
         if f.any():
-            flag(ax, xj[f], v[f], label=False)
+            flag(ax, xj[f], v[f], label=False, facecolor=col)
         if labels and len(v):
             ax.text(x0 + width * 0.56, np.median(v), fmt.format(np.median(v)), va="center", ha="left", fontsize=6.5,
                     color=INK, zorder=7, bbox=dict(boxstyle="square,pad=0.1", facecolor="white", edgecolor="none"))
