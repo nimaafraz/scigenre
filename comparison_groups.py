@@ -1408,11 +1408,12 @@ def fellows():
         pd.DataFrame(rows).to_csv(os.path.join(OUT, "per_person_INTERNAL.csv"), index=False); print("CLASSIFY DONE")
 
     # ---------- 5. report ----------
-    def compare(Dx, title):
-        """Medians, Holm-corrected Mann-Whitney tests and citation-adjusted survey dependence for one scope."""
+    def compare(Dx, title, C="Survey % of citations", P="Survey % of papers"):
+        """Medians, Holm-corrected Mann-Whitney tests and citation-adjusted survey dependence for one scope. Shares count
+        all records, as everywhere in the paper; report() also gives the shares among classified papers as a robustness
+        check."""
         from scipy.stats import mannwhitneyu
         from sklearn.linear_model import QuantileRegressor
-        C = "Survey % of citations (classified)"
         logit = lambda x: np.log(np.clip(x, 0.5, 99.5) / (100 - np.clip(x, 0.5, 99.5)))
         X = lambda d: np.c_[np.log10(d.Citations.clip(lower=1)), d["career start"].fillna(d["career start"].median())]
         ref = Dx[Dx.group == "Reference sample"].dropna(subset=[C])
@@ -1420,14 +1421,14 @@ def fellows():
         r0 = logit(ref[C]) - q.predict(X(ref)); sd = 1.4826 * np.median(np.abs(r0 - np.median(r0)))
         Dx = Dx.assign(z=(logit(Dx[C]) - q.predict(X(Dx))) / sd, expected=100 / (1 + np.exp(-q.predict(X(Dx)))))
         groups = ["HCR-listed 2025", "ACM Fellow 2025-26", "IEEE Fellow 2026", "Reference sample"]
-        cols = ["Survey % of classified papers", C, "Dividend D", "R_h %", "Citations", "h-index", "career start", "expected", "z"]
+        cols = [P, C, "Dividend D", "R_h %", "Citations", "h-index", "career start", "expected", "z"]
         med = lambda d, c: f"{d[c].median():.1f} [{d[c].quantile(.25):.1f}-{d[c].quantile(.75):.1f}]"
         lines = [f"## {title}", "", "| median [IQR] | " + " | ".join(f"{g} (n={int((Dx.group == g).sum())})" for g in groups) + " |",
                  "|---|" + "---|" * len(groups)]
         lines += [f"| {c} | " + " | ".join(med(Dx[Dx.group == g], c) for g in groups) + " |" for c in cols]
         tests = []
         for g in groups[1:3]:
-            for c in ["Survey % of classified papers", C, "Dividend D", "z"]:
+            for c in [P, C, "Dividend D", "z"]:
                 a, b = Dx[Dx.group == "HCR-listed 2025"][c].dropna(), Dx[Dx.group == g][c].dropna()
                 u = mannwhitneyu(a, b); tests.append((g, c, u.pvalue, u.statistic / (len(a) * len(b))))
         order = np.argsort([t[2] for t in tests]); adj = np.empty(len(tests)); run = 0
@@ -1440,7 +1441,7 @@ def fellows():
         for g in groups[:3]:
             d = Dx[(Dx.group == g) & (Dx.Citations >= lo)]
             lines.append(f"- {g}: n = {len(d)}, survey % of citations {d[C].median():.1f}, dividend {d['Dividend D'].median():.1f}, "
-                         f"survey % of papers {d['Survey % of classified papers'].median():.1f}")
+                         f"survey % of papers {d[P].median():.1f}")
         return lines, Dx
 
     def report():
@@ -1457,11 +1458,13 @@ def fellows():
                 "Academic and kept (ROR education type of the printed affiliation, else OpenAlex): " +
                 ", ".join(f"{g} {int((d.academic == True).sum())} of {len(d)}" for g, d in Dx.groupby("group")), ""]
         main, scored = compare(Dx[Dx.academic == True], "Academic researchers only (non-academic researchers dropped from every group)")
+        robust, _ = compare(Dx[Dx.academic == True], "Robustness: shares among classified papers only (academic researchers)",
+                            C="Survey % of citations (classified)", P="Survey % of classified papers")
         from scipy.stats import mannwhitneyu
-        acm = scored[scored.group == "ACM Fellow 2025-26"]; C = "Survey % of citations (classified)"
+        acm = scored[scored.group == "ACM Fellow 2025-26"]; C = "Survey % of citations"
         a25, a26 = acm[acm.announced == 2025][C].dropna(), acm[acm.announced == 2026][C].dropna()
         both = set(M[(M.group == "ACM Fellow 2025-26") & (M.status == "ok")]["OpenAlex ID"]) & set(M[(M.group == "IEEE Fellow 2026") & (M.status == "ok")]["OpenAlex ID"])
-        lines = head + main + ["", f"ACM classes: announced 2025 (n={len(a25)}) median survey % of citations {a25.median():.1f}, announced 2026 "
+        lines = head + main + [""] + robust + ["", f"ACM classes: announced 2025 (n={len(a25)}) median survey % of citations {a25.median():.1f}, announced 2026 "
                                     f"(n={len(a26)}) {a26.median():.1f}, Mann-Whitney p = {mannwhitneyu(a25, a26).pvalue:.2g}",
                                f"Fellows of both societies (kept in both Fellow groups): {len(both)}"]
         open(os.path.join(OUT, "report.md"), "w").write("\n".join(lines)); print("\n".join(lines))

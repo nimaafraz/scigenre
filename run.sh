@@ -133,7 +133,7 @@ done
 for s in load match academic fetch classify report; do $PY comparison_groups.py fellows $s; done
 
 # ---------------------------------------------------------------------------------------------------------------
-# 6. Analyses (outputs under hcr_study/). "figures.py hcr" runs once here because it fixes R1-R10
+# 6. Analyses (outputs under hcr_study/). "figures.py hcr" runs once here because it fixes R1-R8
 #    (hcr_study/v2_top10_key_INTERNAL.csv), which later steps mark in their figures.
 # ---------------------------------------------------------------------------------------------------------------
 $PY comparison_groups.py peers analyze
@@ -150,7 +150,7 @@ $PY analyses.py boundary-scenarios
 $PY analyses.py primary-endpoints
 $PY analyses.py s2-types hcr           # [S2]
 $PY analyses.py s2-rule                # [in:smyth_cunningham]
-$PY analyses.py dividend-window        # [in:smyth_cunningham]
+$PY analyses.py dividend-window
 $PY analyses.py keyword-rules
 $PY analyses.py abstract-sources       # [S2] [EL]
 $PY analyses.py paper-numbers

@@ -269,9 +269,9 @@ def calculate_indices(df: pd.DataFrame) -> Tuple[int, int]:
 # =====================================================================================================================
 #
 # Shared figure style for the paper: palette, fonts, panel labels, and the marker that flags
-# the ten most affected 2025 records (R1-R10) in every plot where they appear.
+# the 2025 records with more than half of their citations from surveys (R1-R8) in every plot where they appear.
 #
-# R1-R10 are drawn as HCR-listed points (blue) with a diamond shape and dark outline; no
+# R1-R8 are drawn as HCR-listed points (blue) with a diamond shape and dark outline; no
 # individual labels are shown (re-identification, see the paper's ethics section).
 
 FIG = os.path.join(STUDY, "figures")
@@ -298,7 +298,7 @@ POINT = dict(s=7, alpha=0.55, linewidths=0)   # one dot per researcher
 SPRINGER = os.environ.get("FIG_PROFILE", "") == "springer"
 WIDE = 5.15 if SPRINGER else 7.16
 
-R_LABEL = "R1–R10 (ten most affected records)"
+R_LABEL = "R1–R8 (over half of citations from surveys)"
 R_MARK = dict(marker="D", s=15, facecolor=LISTED, edgecolor=INK, linewidths=0.6, zorder=6)
 
 plt.rcParams.update({
@@ -338,7 +338,7 @@ def save(fig, name):
 
 
 def flag(ax, x, y, label=True, **kw):
-    """Draw R1-R10 points with the shared diamond marker."""
+    """Draw R1-R8 points with the shared diamond marker."""
     style_ = {**R_MARK, **kw}
     return ax.scatter(x, y, label=R_LABEL if label else None, **style_)
 
@@ -358,7 +358,7 @@ def person_key(first, last):
 
 
 def r_sets():
-    """R1-R10 as HCR names, OpenAlex IDs, and person keys (internal use only)."""
+    """R1-R8 as HCR names, OpenAlex IDs, and person keys (internal use only)."""
     top = pd.read_csv(os.path.join(STUDY, "v2_top10_key_INTERNAL.csv"))
     names = set(top["key"])
     sd = pd.read_csv(os.path.join(STUDY, "outliers", "survey_dependence_INTERNAL.csv"))
@@ -369,7 +369,7 @@ def r_sets():
 
 def boxes(ax, data, positions, colors, flags=None, width=0.5, fmt="{:.1f}%", labels=True, rng=None):
     """Neutral boxes (interquartile range, median, whiskers to the Tukey fences) over one dot per researcher in the
-    group's colour. flags (boolean arrays) mark R1-R10 with the shared diamond. The median is written beside the box."""
+    group's colour. flags (boolean arrays) mark R1-R8 with the shared diamond. The median is written beside the box."""
     rng = rng if rng is not None else np.random.default_rng(42)
     flags = flags if flags is not None else [None] * len(data)
     for x0, v, col, f in zip(positions, data, colors, flags):

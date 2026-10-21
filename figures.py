@@ -16,7 +16,7 @@ from scipy.stats import kendalltau, wilcoxon
 import common
 import comparison_groups
 from common import (
-    ACM, FIELD, flag, IEEE, INK, INK_2, LISTED, LW, MATCHED, MS, panel, POINT, r_handle, R_MARK, r_sets, REFERENCE,
+    ACM, flag, IEEE, INK, INK_2, LISTED, LW, MATCHED, MS, panel, POINT, r_handle, R_MARK, r_sets, REFERENCE,
     save, SPRINGER, style, WIDE,
 )
 
@@ -44,7 +44,7 @@ def hcr_figures():
 
     Output: hcr_study/figures/*.pdf (+ .png previews)
             hcr_study/v2_stats.md (numbers quoted in the paper)
-            hcr_study/v2_top10_key_INTERNAL.csv (R1-R10, read by common.r_sets)"""
+            hcr_study/v2_top10_key_INTERNAL.csv (R1-R8, read by common.r_sets)"""
     CTRL = os.path.join(STUDY, "peers")
     FIG = os.path.join(STUDY, "figures")
     os.makedirs(FIG, exist_ok=True)
@@ -74,7 +74,7 @@ def hcr_figures():
 
 
     def rflags(series_list):
-        """R1-R10 masks aligned with Series taken from M (by index)."""
+        """R1-R8 masks aligned with Series taken from M (by index)."""
         return [M.loc[s.index, "key"].isin(R_NAMES).values for s in series_list]
 
 
@@ -166,9 +166,10 @@ def hcr_figures():
     for col, before, after in (("h_drop", "h", "h_x"), ("cites_drop", "cites", "cites_x"), ("top1_drop", "top1", "top1_x")):
         M[col] = np.where(M[before] > 0, 100 * (M[before] - M[after]) / M[before], np.nan)
     M["yield_ratio"] = M["cites_per_survey"] / M["cites_per_research"]
-    # R1-R10: the ten records with the largest citation drop when surveys are excluded (= survey share of citations),
+    # R1-R8: the records that draw more than half of their citations from surveys (citation drop > 50% when surveys are
+    # excluded = survey share of citations), in order of the drop,
     # from this run's data (the key file is rewritten at the end, so reading it at start-up could be stale)
-    R_ORDER = M.sort_values("cites_drop", ascending=False, kind="stable").head(10)["key"].tolist()
+    R_ORDER = M[M["cites_drop"] > 50].sort_values("cites_drop", ascending=False, kind="stable")["key"].tolist()
     R_NAMES = set(R_ORDER)
 
     stats = []
@@ -471,8 +472,8 @@ def hcr_figures():
     # FIG: most affected records, relative changes only
     # ============================================================
 
-    top = M.set_index("key").loc[R_ORDER].reset_index()           # R1-R10 in order of citation drop
-    top["Label"] = [f"R{i}" for i in range(1, 11)]
+    top = M.set_index("key").loc[R_ORDER].reset_index()           # R1-R8 in order of citation drop
+    top["Label"] = [f"R{i}" for i in range(1, len(top) + 1)]
     # Stanford-Elsevier composite drop (analyses.py composite), by OpenAlex ID
     comp_path = os.path.join(STUDY, "composite", "composite_INTERNAL.csv")
     id_of = dict(zip(members_meta["key"], members_meta["OpenAlex ID"]))
@@ -484,7 +485,7 @@ def hcr_figures():
         top["comp_drop"] = -top["key"].map(id_of).map(comp)
 
     if SPRINGER:            # (a) to (c) in the first row, (d), (e) and the legend in the second
-        fig = plt.figure(figsize=(WIDE, 5.2), constrained_layout=True)
+        fig = plt.figure(figsize=(WIDE, 1.2 + 0.4 * len(top)), constrained_layout=True)
         gs = fig.add_gridspec(2, 3, width_ratios=[1.3, 1, 1.6])
         _a0 = fig.add_subplot(gs[0, 0])
         axes = [_a0] + [fig.add_subplot(gs[i, j], sharey=_a0) for i, j in ((0, 1), (0, 2), (1, 0), (1, 1))]
@@ -492,7 +493,7 @@ def hcr_figures():
     else:
         fig, axes = plt.subplots(1, 5, figsize=(7.16, 2.9), constrained_layout=True, sharey=True,
                                  gridspec_kw={"width_ratios": [1.3, 1, 1.6, 1, 0.9]})
-    ypos = np.arange(10)[::-1]
+    ypos = np.arange(len(top))[::-1]
 
     # (a) survey share of papers -> of citations (dumbbell)
     ax = axes[0]
@@ -556,13 +557,13 @@ def hcr_figures():
                **({"loc": "center left", "ncol": 1} if SPRINGER else {"loc": "outside lower center", "ncol": 3}))
     save(fig, "fig_top10_relative")
     top[["Label", "key"]].to_csv(os.path.join(STUDY, "v2_top10_key_INTERNAL.csv"), index=False)
-    note("Top-10 median survey share of top-1% papers (%)", top["share_top1"].median())
-    note("Top-10 range of h-index drop (%)", f"{top['h_drop'].min():.0f}-{top['h_drop'].max():.0f}")
-    note("Top-10 range of citation drop (%)", f"{top['cites_drop'].min():.1f}-{top['cites_drop'].max():.1f}")
-    note("Top-10 range of survey share of papers (%)", f"{top['share_papers'].min():.0f}-{top['share_papers'].max():.0f}")
-    note("Top-10 range of composite drop (%)", f"{top['comp_drop'].min():.0f}-{top['comp_drop'].max():.0f}")
-    note("Top-10 minimum top-1% papers without surveys", int(top['top1_x'].min()))
-    note("Top-10 range of top-1% paper drop (%)", f"{top['top1_drop'].min():.0f}-{top['top1_drop'].max():.0f}")
+    note("R1-R8 median survey share of top-1% papers (%)", top["share_top1"].median())
+    note("R1-R8 range of h-index drop (%)", f"{top['h_drop'].min():.0f}-{top['h_drop'].max():.0f}")
+    note("R1-R8 range of citation drop (%)", f"{top['cites_drop'].min():.1f}-{top['cites_drop'].max():.1f}")
+    note("R1-R8 range of survey share of papers (%)", f"{top['share_papers'].min():.0f}-{top['share_papers'].max():.0f}")
+    note("R1-R8 range of composite drop (%)", f"{top['comp_drop'].min():.0f}-{top['comp_drop'].max():.0f}")
+    note("R1-R8 minimum top-1% papers without surveys", int(top['top1_x'].min()))
+    note("R1-R8 range of top-1% paper drop (%)", f"{top['top1_drop'].min():.0f}-{top['top1_drop'].max():.0f}")
 
 
     # ============================================================
@@ -601,11 +602,11 @@ def fellows_figure():
     share of citations (the citation drop when surveys are excluded), and the survey citation dividend.
     In every group, points beyond the group's own Tukey fence for the survey share of citations have a dark outline, and
     the researcher with the highest survey share of citations is enlarged in all panels, with only the value shown.
-    R1-R10 keep the shared diamond marker. No researcher is named.
+    R1-R8 keep the shared diamond marker. No researcher is named.
     Output: hcr_study/figures/fig_fellows.{pdf,png}"""
     GROUPS = [("HCR-listed 2025", "HCR-\nlisted", LISTED), ("ACM Fellow 2025-26", "ACM\nFellows", ACM),
               ("IEEE Fellow 2026", "IEEE\nFellows", IEEE), ("Reference sample", "Random\nsample", REFERENCE)]
-    P, C, D = "Survey % of classified papers", "Survey % of citations (classified)", "Dividend D"
+    P, C, D = "Survey % of papers", "Survey % of citations", "Dividend D"   # all records, as everywhere in the paper
 
     d = pd.read_csv(os.path.join(HERE, "hcr_study", "fellows2026", "per_person_scored_INTERNAL.csv"))
     rids = r_sets()["ids"]
@@ -687,26 +688,22 @@ def fellows_figure():
 def dividend_figure():
     """Figure for the Discussion section (figures.py dividend) on the incentive to write surveys (analyses.py dividend-window results).
     (a) Within-researcher survey dividend by publication cohort, citations in the first three years, medians with 95%
-        bootstrap intervals, R1-R10 as diamonds. (b) Smyth & Cunningham's measure (median normalized citations of surveys /
-        research papers) on their Computer Science data with their labels and all citations, and on our groups' papers
-        with the three-year window. (c) Papers of 2012-2014 followed for eleven years: cumulative citations of surveys /
-        research papers of the same researcher. No researcher is named.
+        bootstrap intervals, R1-R8 as diamonds. (b) Papers of 2012-2014 followed for eleven years: cumulative citations of
+        surveys / research papers of the same researcher. No researcher is named.
     Output: hcr_study/figures/fig_dividend.{pdf,png}"""
     D = os.path.join(HERE, "hcr_study", "dividend_window")
     GROUPS = [("HCR-listed", "HCR-listed", LISTED), ("Reference", "Random sample", REFERENCE),
               ("ACM Fellows", "ACM Fellows", ACM), ("IEEE Fellows", "IEEE Fellows", IEEE)]
     LINE = dict(linewidth=LW, marker="o", markersize=MS)
     A = pd.read_csv(os.path.join(D, "within.csv")); A = A[A.measure == "3-year window"]
-    B = pd.read_csv(os.path.join(D, "sc_measure.csv")); V = pd.read_csv(os.path.join(D, "speed.csv"))
+    V = pd.read_csv(os.path.join(D, "speed.csv"))
     COH = ["2012-14", "2015-17", "2018-20", "2021-23"]
-    ALL = ["2000-02", "2003-05", "2006-08", "2009-11"] + COH
     tick = lambda c: c.replace("-", "–")
 
-    if SPRINGER:            # 2 x 2: three panels and the legend
-        fig, _ax4 = plt.subplots(2, 2, figsize=(WIDE, 4.8), gridspec_kw={"wspace": 0.42, "hspace": 0.62})
-        axes = [_ax4[0, 0], _ax4[0, 1], _ax4[1, 0]]; _leg = _ax4[1, 1]; _leg.axis("off")
+    if SPRINGER:            # two panels side by side, the legend below
+        fig, axes = plt.subplots(1, 2, figsize=(WIDE, 2.9), gridspec_kw={"wspace": 0.45})
     else:
-        fig, axes = plt.subplots(1, 3, figsize=(7.16, 2.45), gridspec_kw={"wspace": 0.36})
+        fig, axes = plt.subplots(1, 2, figsize=(7.16, 2.45), gridspec_kw={"wspace": 0.3})
     for ax in axes:
         style(ax); ax.axhline(1, color=INK_2, linewidth=0.6, linestyle=":", zorder=1)
 
@@ -715,7 +712,7 @@ def dividend_figure():
         e = A[A.group == g].set_index("cohort").reindex(COH); x = np.arange(len(COH)) + (k - 1.5) * 0.06
         ax.errorbar(x, e["median D"], yerr=[e["median D"] - e["CI low"], e["CI high"] - e["median D"]], color=col, capsize=0,
                     elinewidth=0.7, zorder=3, **LINE)
-    r = A[A.group == "R1-R10"].set_index("cohort").reindex(COH)
+    r = A[A.group == "R1-R8"].set_index("cohort").reindex(COH)
     ax.plot(np.arange(len(COH)) + 0.12, r["median D"], color=LISTED, linewidth=0.7, linestyle="--", zorder=4)
     ax.scatter(np.arange(len(COH)) + 0.12, r["median D"], **{**R_MARK, "s": 16})
     ax.set_xticks(range(len(COH)), [tick(c) for c in COH]); ax.set_ylim(0, None)
@@ -723,33 +720,20 @@ def dividend_figure():
     panel(ax, "a", "Within researcher, first 3 years")
 
     ax = axes[1]
-    sc = B[B.population.str.startswith("Their")].iloc[0]
-    ax.plot(range(len(ALL)), [sc[c] for c in ALL], color=FIELD, linewidth=1.1, linestyle="--", marker="s", markersize=2.6, zorder=4)
-    for g, _, col in GROUPS:
-        row = B[(B.population == f"{g} papers, SciGenre") & (B.citations == "3-year window")].iloc[0]
-        ax.plot(range(4, len(ALL)), [row[c] for c in COH], color=col, zorder=3, **LINE)
-    ax.set_xticks(range(len(ALL)), [tick(c) for c in ALL], rotation=45, ha="right", rotation_mode="anchor"); ax.set_ylim(0, None)
-    ax.set_xlabel("Publication years"); ax.set_ylabel("Median normalized citations,\nsurveys / research papers")
-    panel(ax, "b", "Smyth and Cunningham's measure")
-
-    ax = axes[2]
     for g, _, col in GROUPS:
         e = V[V.group == g].sort_values("years after publication")
         ax.plot(e["years after publication"], e["median ratio"], color=col, **LINE)
     ax.set_xticks(range(0, 11, 2)); ax.set_ylim(0, None)
     ax.set_xlabel("Years after publication"); ax.set_ylabel("Cumulative citations,\nsurveys / research papers")
-    panel(ax, "c", "Timing, papers of 2012–2014")
+    panel(ax, "b", "Timing, papers of 2012–2014")
 
-    rh = r_handle(); rh.set_label("R1–R10")
-    handles = [plt.Line2D([], [], color=col, label=lab, **LINE) for _, lab, col in GROUPS] + [rh,
-               plt.Line2D([], [], color=INK, linewidth=1.1, linestyle="--", marker="s", markersize=2.6,
-                          label="Smyth and Cunningham's data, their labels")]
+    rh = r_handle(); rh.set_label("R1–R8")
+    handles = [plt.Line2D([], [], color=col, label=lab, **LINE) for _, lab, col in GROUPS] + [rh]
+    fig.legend(handles=handles, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), fontsize=6.5, columnspacing=1.2, handlelength=2.2)
     if SPRINGER:
-        _leg.legend(handles=handles, loc="center left", ncol=1, fontsize=6.5, handlelength=2.2)
-        fig.subplots_adjust(bottom=0.1, top=0.94, left=0.11, right=0.99)
+        fig.subplots_adjust(bottom=0.26, top=0.9, left=0.12, right=0.99)
     else:
-        fig.legend(handles=handles, loc="lower center", ncol=6, bbox_to_anchor=(0.5, 0.0), fontsize=6.5, columnspacing=1.2, handlelength=2.2)
-        fig.subplots_adjust(bottom=0.33, top=0.9, left=0.075, right=0.99)
+        fig.subplots_adjust(bottom=0.3, top=0.9, left=0.075, right=0.99)
     save(fig, "fig_dividend")
     print("saved fig_dividend")
 

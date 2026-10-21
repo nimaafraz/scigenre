@@ -1263,18 +1263,13 @@ def dividend_window():
         research paper of the same researcher and cohort (at least one survey and three research papers). Citations are
         counted (i) in a fixed window, the publication year and the two years after it (OpenAlex counts_by_year, which
         start in 2012, so cohorts 2012-2023), and (ii) in total up to the profile date, for comparison.
-    (B) Smyth & Cunningham's measure: all papers of a group pooled (each paper once), citations divided by the group's
-        mean for the publication year (normalized citation index, NCI), and the median NCI of surveys divided by the
-        median NCI of research papers per cohort. Also on their own Computer Science data (their labels), and on the
-        HCR-listed papers with their rule (Semantic Scholar types from hcr_study/s2_types/hcr.json).
-
-    Groups: the 102 HCR-listed researchers (R1-R10 also separately), the 350 reference researchers, and the academic
-    ACM (91) and IEEE (91) Fellows, as in the Fellows comparison.
-    Inputs: classified profiles, hcr_study/growth_survey/yearly/<id>.csv (analyses.py yearly-citations),
-    inputs/smyth_cunningham/sc_labels_cs.csv (Smyth & Cunningham's released labels, Computer Science rows).
-    (C) Timing: papers of 2012-2014 followed for eleven years. (D) Career stage: papers written within ten years of
+    (B) Timing: papers of 2012-2014 followed for eleven years. (C) Career stage: papers written within ten years of
         the first publication vs later (career start from the Fellows comparison file, academic researchers).
-    Output: hcr_study/dividend_window/{within.csv, within_researcher.csv, sc_measure.csv, speed.csv, results.md}"""
+
+    Groups: the HCR-listed researchers (R1-R8 also separately), the reference researchers, and the academic ACM and
+    IEEE Fellows, as in the Fellows comparison.
+    Inputs: classified profiles, hcr_study/growth_survey/yearly/<id>.csv (analyses.py yearly-citations).
+    Output: hcr_study/dividend_window/{within.csv, within_researcher.csv, speed.csv, results.md}"""
     ST = os.path.join(HERE, "hcr_study"); YEARLY = os.path.join(ST, "growth_survey", "yearly"); OUT = os.path.join(ST, "dividend_window")
     WIN = [(2012, 2014), (2015, 2017), (2018, 2020), (2021, 2023)]                     # fixed-window cohorts
     ALL = [(a, a + 2) for a in range(2000, 2022, 3)]                                    # 2000-02 ... 2021-23, total citations
@@ -1322,21 +1317,13 @@ def dividend_window():
         return pd.DataFrame(rows)
 
 
-    def sc_measure(P, col, cohorts, label="Category"):
-        """Median NCI of surveys / median NCI of research papers; NCI = citations / mean of the pool's papers that year."""
-        P = P[P[col].notna()].drop_duplicates("id").copy()
-        P["nci"] = P[col] / P.groupby("year")[col].transform("mean")
-        surv = P[label] == "survey" if label == "Category" else P[label]
-        return {lab(c): P.loc[surv & P.year.between(*c), "nci"].median() / P.loc[~surv & P.year.between(*c), "nci"].median() for c in cohorts}
-
-
     def speed(P):
         """Papers of 2012-2014, followed for eleven years: ratio of mean cumulative citations (surveys / research papers of
     the same researcher) by year after publication, citations in the first three years, and the share of the first
     eleven years' citations received in the first three."""
         rows, txt = [], []
         for g, d in P.items():
-            for name, sub in ((g, d), ("R1-R10", d[d.R])) if g == "HCR-listed" else ((g, d),):
+            for name, sub in ((g, d), ("R1-R8", d[d.R])) if g == "HCR-listed" else ((g, d),):
                 e = sub[sub.year.between(2012, 2014) & sub.cum10.notna()]
                 res = []
                 for aid, x in e.groupby("aid"):
@@ -1383,7 +1370,7 @@ def dividend_window():
         # (A) within researcher
         rows, Wall = [], []
         for g, d in P.items():
-            for name, sub in ((g, d), ("R1-R10", d[d.R])) if g == "HCR-listed" else ((g, d),):
+            for name, sub in ((g, d), ("R1-R8", d[d.R])) if g == "HCR-listed" else ((g, d),):
                 for col, cohorts, kind in (("w3", WIN, "3-year window"), ("c", WIN, "total citations"), ("c", ALL, "total citations, 2000-2023")):
                     W = within(sub, col, cohorts)
                     for c in cohorts:
@@ -1402,24 +1389,6 @@ def dividend_window():
         A = pd.DataFrame(rows); A.to_csv(os.path.join(OUT, "within.csv"), index=False)
         pd.concat(Wall).to_csv(os.path.join(OUT, "within_researcher.csv"), index=False)
 
-        # (B) Smyth & Cunningham's measure
-        srows = []
-        L = pd.read_csv(os.path.join(HERE, "inputs", "smyth_cunningham", "sc_labels_cs.csv"), usecols=["year", "paper_type", "nci"])
-        srows.append({"population": "Their Computer Science data, their labels", "citations": "total",
-                      **{lab(c): L[(L.paper_type != "original") & L.year.between(*c)].nci.median() / L[(L.paper_type == "original") & L.year.between(*c)].nci.median() for c in ALL}})
-        srows.append({"population": "Their Computer Science data, systematic reviews and meta-analyses", "citations": "total",
-                      **{lab(c): L[L.paper_type.isin(["systematic", "meta"]) & L.year.between(*c)].nci.median() / L[(L.paper_type == "original") & L.year.between(*c)].nci.median() for c in ALL}})
-        T = json.load(open(os.path.join(ST, "s2_types", "hcr.json")))
-        H = P["HCR-listed"].drop_duplicates("id").copy()
-        H["sc"] = [rq1_evaluation.is_review(*rq1_evaluation.from_s2_record(T.get(k), t, a)) for k, t, a in zip(H.id, H.title.fillna(""), H.abstract.fillna(""))]
-        srows.append({"population": "HCR-listed papers, their rule", "citations": "total", **sc_measure(H, "c", ALL, "sc")})
-        for g, d in P.items():
-            srows.append({"population": f"{g} papers, SciGenre", "citations": "total", **sc_measure(d, "c", ALL)})
-        srows.append({"population": "HCR-listed papers, their rule", "citations": "3-year window", **sc_measure(H, "w3", WIN, "sc")})
-        for g, d in P.items():
-            srows.append({"population": f"{g} papers, SciGenre", "citations": "3-year window", **sc_measure(d, "w3", WIN)})
-        B = pd.DataFrame(srows); B.to_csv(os.path.join(OUT, "sc_measure.csv"), index=False)
-
         fmt = lambda df: df.to_markdown(index=False, floatfmt=".2f")
         out = ["# Survey citation dividend by publication cohort", "", "## (A) Within researcher (median over researchers of mean survey / mean research citations)", ""]
         for kind in ("3-year window", "total citations", "total citations, 2000-2023"):
@@ -1428,10 +1397,9 @@ def dividend_window():
             sh = A[A.measure == kind].pivot(index="group", columns="cohort", values="share D>1")
             out += [f"### {kind}: median D", "", fmt(t.reset_index()), "", "researchers (n)", "", fmt(n.reset_index()), "", "share with D > 1", "", fmt(sh.reset_index()), ""]
         ci = A[A.measure == "3-year window"][["group", "cohort", "median D", "CI low", "CI high"]]
-        out += ["### 3-year window, bootstrap 95% intervals of the median", "", fmt(ci), "", *md, "",
-                "## (B) Smyth & Cunningham's measure (median NCI of surveys / median NCI of research papers)", "", fmt(B), ""]
+        out += ["### 3-year window, bootstrap 95% intervals of the median", "", fmt(ci), "", *md, ""]
         V, vt = speed(P); V.to_csv(os.path.join(OUT, "speed.csv"), index=False)
-        out += ["## (C) Timing: papers of 2012-2014 followed for eleven years", "", *vt, "", "## (D) Career stage (3-year window, 2012-2023)", "", *career(P), ""]
+        out += ["## (B) Timing: papers of 2012-2014 followed for eleven years", "", *vt, "", "## (C) Career stage (3-year window, 2012-2023)", "", *career(P), ""]
         open(os.path.join(OUT, "results.md"), "w").write("\n".join(out)); print("\n".join(out))
 
 
@@ -1570,7 +1538,7 @@ def abstract_sources():
 
 def paper_numbers():
     """Numbers quoted in the paper that no analysis script prints directly: the list's Tukey fences, the RQ4 expectation
-    and robustness comparisons, the matched comparisons with Holm correction, and R1-R10 ranges.
+    and robustness comparisons, the matched comparisons with Holm correction, and R1-R8 ranges.
     Inputs: hcr_study/outliers/model_scores_INTERNAL.csv (analyses.py outlier-model), survey_dependence_INTERNAL.csv
     (analyses.py survey-outliers), per_member.csv, peers/ (comparison_groups.py peers), v2_top10_key_INTERNAL.csv (figures.py hcr),
     history/ (profiles.py history), hcr_any_list.csv (comparison_groups.py any-list).   Output: hcr_study/paper_numbers.md"""
@@ -1590,15 +1558,15 @@ def paper_numbers():
         f"matched above: {int((Ms.C > fC).sum())} of {len(Ms)}; reference above: {int((Rs.C > fC).sum())} of {len(Rs)}")
     say("Tukey fence R_h (list)", f"{fH:.1f}%; HCR-listed above: {int((Ls.H > fH).sum())} ({Ls.H[Ls.H > fH].min():.0f}-{Ls.H[Ls.H > fH].max():.0f}%)")
     say("Tukey fence top-1% survey share (list)", f"{fT:.1f}%; HCR-listed above: {int((Ls['T'] > fT).sum())} ({Ls['T'][Ls['T'] > fT].min():.0f}-{Ls['T'][Ls['T'] > fT].max():.0f}%)")
-    # R1-R10 = the ten records with the largest citation drop, in the order of figures.py hcr (v2_top10_key_INTERNAL.csv)
+    # R1-R8 = the records with more than half of their citations from surveys, in the order of figures.py hcr (v2_top10_key_INTERNAL.csv)
     K = pd.read_csv(os.path.join(S, "v2_top10_key_INTERNAL.csv")); order = {k: i for i, k in enumerate(K["key"])}
     top10 = Ls[Ls["key"].isin(order)].assign(o=lambda z: z["key"].map(order)).sort_values("o").reset_index(drop=True)
-    assert len(top10) == 10, len(top10)
-    say("R1-R10 beyond each fence (C, H, T)", f"{[(int(r.C > fC), int(r.H > fH), int(r.T > fT)) for r in top10.itertuples()]}")
-    say("R1-R10: R_h range", f"{top10.H.min():.0f}-{top10.H.max():.0f}%; beyond the R_h fence: {int((top10.H > fH).sum())}, "
+    assert len(top10) == 8, len(top10)
+    say("R1-R8 beyond each fence (C, H, T)", f"{[(int(r.C > fC), int(r.H > fH), int(r.T > fT)) for r in top10.itertuples()]}")
+    say("R1-R8: R_h range", f"{top10.H.min():.0f}-{top10.H.max():.0f}%; beyond the R_h fence: {int((top10.H > fH).sum())}, "
         f"beyond the top-1% fence: {int((top10['T'] > fT).sum())}, beyond the R_C fence: {int((top10.C > fC).sum())}")
-    say("R1-R10: survey % of papers / citations", f"{top10.p.min():.0f}-{top10.p.max():.0f}% / {top10.C.min():.0f}-{top10.C.max():.0f}%")
-    say("R1-R10: top-1% papers without surveys (min)", f"{int(Lx.loc[top10.id, 'top1_x'].min())}")
+    say("R1-R8: survey % of papers / citations", f"{top10.p.min():.0f}-{top10.p.max():.0f}% / {top10.C.min():.0f}-{top10.C.max():.0f}%")
+    say("R1-R8: top-1% papers without surveys (min)", f"{int(Lx.loc[top10.id, 'top1_x'].min())}")
     say("max residual z, HCR-listed", f"{L.z.max():.2f}; records with R_C >= 75%: z = {', '.join(f'{z:.1f}' for z in L[L.C >= 75].z)}")
 
     # RQ4: expectation and robustness
